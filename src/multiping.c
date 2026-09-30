@@ -1,23 +1,8 @@
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
-
-#include <signal.h>
-
-#include <sys/socket.h>
-#include <sys/time.h>
-
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <linux/icmp.h>
-#include <linux/ip.h>
-
-#define MAXHOSTS 5
-#define BUFSIZE 1000 
+#include "multiping.h"
+#include "colors.h"
 
 struct timeval starttime;
 struct timeval endtime;
-
 char sendbuf[BUFSIZE];
 int pid;
 int nsent[MAXHOSTS];
@@ -25,98 +10,9 @@ int sockfd;
 struct in_addr targetip[MAXHOSTS];
 int ntargets;
 int ti; // target index
-
 long unsigned ntpackets; // number of transmitted ping packet
 long unsigned nrpackets; // number of received ping packet
 ssize_t sizetdata; // transmitted data size
-//
-#define RED 	"\e[1;31m"
-#define GREEN 	"\e[1;32m"
-#define YELLOW 	"\e[1;33m"
-#define BLUE 	"\e[1;34m"
-#define PURPLE 	"\e[1;35m"
-#define CYAN 	"\e[1;36m"
-#define RESET 	"\e[1;0m"
-
-typedef struct {
-    struct 	icmphdr icmph;	// 8  Bytes
-    struct 	timeval tv;		// 16 Bytes
-	char 	padding[40];	// 40 Bytes
-} ping_packet_t; 			// Total=64 Bytes
-
-void icmp_ping( struct in_addr target_ipaddr);
-void icmp_pong( struct in_addr target_ipaddr);
-unsigned short calculate_checksum(void *b, int len);
-
-int calculate_duration(struct timeval* duration, const struct timeval* late, const struct timeval* early); 
-// duration = late - early, return -1 if invalid duration
-
-void printcolor();
-
-void sigalrm(int signo){
-	if(ti >= ntargets) ti = 0;
-	icmp_ping(targetip[ti++]);
-	return;
-}
-
-void sigint(int signo){
-	printf("\nSIGINT detected: stopping multiping...\n");
-	struct timeval duration;
-	gettimeofday(&endtime, NULL);
-	calculate_duration(&duration, &endtime, &starttime);
-	printf(RED "\n------ multiping statistics ------\n")	;
-	printf("%lu packets transmitted\n", ntpackets);
-	printf("%lu packets received\n", nrpackets);
-	printf("%.1f %% of packet loss\n", (float)(ntpackets-nrpackets)*100/(float)ntpackets );
-	printf("%lu bytes of data transmitted\n", sizetdata + ntpackets*20);
-	printf("transmission lasts %lu s %lu ms\n\n", duration.tv_sec, duration.tv_usec/1000);
-	printf(RESET);
-	close(sockfd);
-	_exit(0);
-}
-
-int main(int argc, char** argv)
-{
-	pid_t pid = getpid() & 0xffff;
-	memset(nsent, 0, sizeof(nsent));
-	ntargets = 0;
-	ntpackets = 0;
-	nrpackets = 0;
-	ti = 0;
-
-	if(argc == 1){
-		fprintf(stderr, RED "usage: multiping <IPv4 addresses...>\n" RESET);
-		return -1;
-	}
-	for(int i = 0; i < argc -1; i++) {
-		if(i > MAXHOSTS) break;
-
-		if( (targetip[i].s_addr = inet_addr(argv[i+1])) == -1){
-			fprintf(stderr, "invalid IP addr\n");
-			return -1;
-		}else ntargets++;
-
-		printf("ip[%d]: %s\n", i, inet_ntoa(targetip[i]));
-	}
-	printf("----------------------------------\n");
-	//printf("number of target: %d\n", ntargets);
-
-	sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-
-	signal(SIGALRM, sigalrm);
-	signal(SIGINT, sigint);
-
-	gettimeofday(&starttime, NULL);
-	alarm(1);
-	
-	while(1)
-	{
-		printcolor();
-		icmp_pong(targetip[ti]);
-	}
-	close(sockfd);
-
-}
 
 void icmp_ping(struct in_addr target_ipaddr)
 {
@@ -150,7 +46,7 @@ void icmp_ping(struct in_addr target_ipaddr)
 	ntpackets++;
     if ( n < 0) {
 		fflush(stdout);
-        perror(RED "multiping error: sendto: ");
+        perror(COLOR_FG_RED "multiping error: sendto: ");
 		printf("\n");
 		alarm(1);
     } else {
@@ -233,22 +129,22 @@ void printcolor()
 {
 	switch(ti-1){
 		case 0:
-			printf(GREEN);
+			printf(COLOR_FG_GREEN);
 		break;
 		case 1:
-			printf(BLUE);
+			printf(COLOR_FG_BLUE);
 		break;
 		case 2:
-			printf(YELLOW);
+			printf(COLOR_FG_YELLOW);
 		break;
 		case 3:
-			printf(CYAN);
+			printf(COLOR_FG_CYAN);
 		break;
 		case 4:
-			printf(PURPLE);
+			printf(COLOR_FG_MAGENTA);
 		break;
 		default:
-			printf(RESET);
+			printf(COLOR_RESET);
 		break;
 	}
 }
